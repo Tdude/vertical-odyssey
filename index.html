@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vertical Odyssey</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-wrapper"> <!-- Added a wrapper for easier centering/styling -->
+        <div id="instructionsScreen">
+            <h2>Vertical Odyssey</h2>
+            <p><em>A 70s Arcade Rock Climbing Challenge!</em></p>
+            <p><strong>Your Quest:</strong>You are Steffo, the Red Beard Legend.  Ascend the treacherous, ever-shifting rock face. Your legend grows with every perilous meter conquered. Only the tenacious will etch their name into the annals of the Odyssey.</p>
+            
+            <p><strong>Commands of The Holy Climb:</strong></p>
+            <ul>
+                <li><strong>Click Mouse:</strong> Reach for and grab a visible handhold. Choose wisely; your reach is mighty, but not infinite!</li>
+                <li><strong>'P' Key:</strong> When clinging to a sturdy crack (the rectangular holds), press 'P' to place a "nut" – your vital safety anchor.</li>
+            </ul>
+
+            <p><strong>The Perils & Principles:</strong></p>
+            <ul>
+                <li><strong>Veiled Holds:</strong> Grips shimmer into existence only as you draw near. Anticipate and explore!</li>
+                <li><strong>Fleeting Stability:</strong> Every hold is ephemeral! Cling too long, and you will slip with your sweaty little korvfingers. Agility is key.</li>
+                <li><strong>The Fall & Return:</strong> A misstep or failed grip sends you plummeting to your last secure protection, or worse. You'll earn no glory until your previous altitude is reclaimed.</li>
+                <li><strong>Vital Essence (Stamina):</strong> Each move saps your strength. Exhaustion means an inevitable fall.</li>
+                <li><strong>Precious Anchors:</strong> Your protection supply is finite. Place them with strategic foresight – the higher you climb, the greater the risk... and the reward.</li>
+            </ul>
+            <p class="start-prompt">Click or Press any Key to Begin Your Odyssey!</p>
+        </div>
+
+        <div id="game-container" class="hidden"> <!-- Initially hidden -->
+            <canvas id="gameCanvas"></canvas>
+            <div id="ui-container"> <!-- This is the scoreboard -->
+                <div>Score: <span id="score">0</span></div>
+                <div>Stamina: <span id="stamina">100</span></div>
+                <div>Protection: <span id="protectionCount">3</span></div>
+                <div>Height: <span id="currentHeight">0</span>m</div>
+            </div>
+        </div>
+
+        <div id="gameOverScreen" class="hidden"> <!-- Initially hidden -->
+            <h1>Game Over</h1>
+            <p>Final Score: <span id="finalScore">0</span></p>
+            <p>High Score: <span id="highScoreDisplay">0</span></p>
+            <button id="restartButton">Restart Odyssey</button>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
