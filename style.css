@@ -25,7 +25,7 @@ body {
     color: #0f0;
     padding: 20px 30px;
     border-radius: 8px;
-    max-width: 550px;
+    max-width: 800px;
     box-shadow: 0 0 15px rgba(0, 255, 0, 0.4);
 }
 
@@ -34,6 +34,7 @@ body {
     margin-top: 0;
     margin-bottom: 10px;
     color: #0f0;
+    text-shadow: 0 0 12px #6f6;
 }
 #instructionsScreen p {
     font-size: 0.95em;
@@ -73,12 +74,13 @@ body {
     margin-top: 25px;
     text-align: center;
     animation: blink 1.5s infinite;
-    color: #ffc107; /* Amber color for prompt */
+    color: #ffc107;
+    text-shadow: 0 0 10px #f6cc50;
 }
 
 @keyframes blink {
     0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+    50% { opacity: 0.5;text-shadow: 0; }
 }
 
 
@@ -132,12 +134,14 @@ body {
     margin-top: 0;
     font-size: 2.2em;
     color: #0f0;
+    text-shadow: 0 0 10px #6f6;
 }
 
 #restartButton {
     background-color: #080;
     color: #000;
     border: 2px solid #0f0;
+    box-shadow: 0 0 10px #6f6;
     padding: 12px 25px;
     font-size: 1.1em;
     font-weight: bold;
