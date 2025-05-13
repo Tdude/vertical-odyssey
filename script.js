@@ -2,6 +2,8 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
+// Debug flag is already defined at line 87
+
 // UI Elements (assuming these are already defined from previous steps)
 const instructionsScreen = document.getElementById('instructionsScreen');
 const gameContainer = document.getElementById('game-container');
@@ -23,7 +25,7 @@ canvas.height = CANVAS_HEIGHT;
 
 const CLIMBER_BODY_WIDTH = 12;
 const CLIMBER_BODY_HEIGHT = 18;
-const CLIMBER_HEAD_RADIUS = 5;
+const CLIMBER_HEAD_RADIUS = 10;
 const CLIMBER_COLOR = '#3345cc'; 
 const CLIMBER_HEAD_COLOR = '#FFC0CB'; 
 const CLIMBER_REACH = 75;
@@ -35,7 +37,7 @@ const STAMINA_COST_MOVE = 15;               // Stamina cost for successfully rea
 const STAMINA_COST_PER_SECOND_MOVING = 7;   // Stamina cost per second while actively moving
 const STAMINA_COST_FALL_CAUGHT = 40;        // Stamina penalty for a fall caught by protection
 const STAMINA_RECOVERY_THRESHOLD = 25;      // Stamina level at which climber is no longer exhausted
-const INITIAL_PROTECTION_COUNT = 3;
+const INITIAL_PROTECTION_COUNT = 3;         // How many nuts you have
 const MAX_CATCHABLE_FALL_DISTANCE = 360; // Approx 6 grips fall limit
 
 const GRIP_SIZE_MIN = 7;
@@ -86,6 +88,20 @@ let showDebugInfo = false; // For toggling debug display
 // High Score
 const HIGH_SCORE_KEY = 'verticalOdysseyHighScore';
 let highScore = 0;
+
+// Crisp pixel art
+function setupCanvas(canvas) {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    
+    return ctx;
+}
 
 // Audio
 let audioCtx;
@@ -138,7 +154,7 @@ function playSound(type) {
             break;
         case 'degradeTick':
             oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(150, audioCtx.currentTime);
+            oscillator.frequency.setValueAtTime(50, audioCtx.currentTime);
             gainNode.gain.setValueAtTime(0.02, audioCtx.currentTime);
             duration = 0.08;
             break;
@@ -159,6 +175,13 @@ function playSound(type) {
             oscillator.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.5);
             gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
             duration = 0.5;
+            break;
+        case 'belay_click': 
+            oscillator.type = 'square';
+            oscillator.frequency.setValueAtTime(700, audioCtx.currentTime);
+            oscillator.frequency.setValueAtTime(880, audioCtx.currentTime + 0.03);
+            gainNode.gain.setValueAtTime(0.06, audioCtx.currentTime);
+            duration = 0.06;
             break;
         default: return;
     }
@@ -200,6 +223,21 @@ class Climber {
         this.RECOVERY_DURATION = 2000; // Duration for recovery in ms
         this.recoverSound = 'fallCaughtSound'; // Sound to play at recovery end
         this.catchSound = 'fallCaughtSound'; // Sound to play when caught by protection
+        this.isBelayingUp = false; // State for belaying up
+
+        // Facial features animation
+        this.facialFeaturesState = 'facingForward'; // 'facingForward', 'turningHead', 'headTurned'
+        this.turnAnimationProgress = 0; // 0 to 1
+        this.TURN_ANIMATION_DURATION = 300; // milliseconds
+
+        // Idle look animation
+        this.idleTimer = 0; // ms
+        this.IDLE_TIMEOUT_DURATION = 5000; // 5 seconds to trigger idle look
+        this.isPerformingIdleLook = false;
+        this.idleLookPhase = 'none'; // e.g., 'turningLeft', 'lookingLeft', 'returningFromLeft', etc.
+        this.idleLookPauseTimer = 0; // ms
+        this.IDLE_LOOK_PAUSE_DURATION = 1000; // 1 second pause when looking left/right
+        this.MIN_IDLE_FEATURE_SCALE = 0.2; // Min scale for features when looking aside during idle
 
         // ADDED: Rope mechanics properties
         this.ropePathNodes = [{ x: ROUTE_START_COORDS.x, y: ROUTE_START_COORDS.y, type: 'start', id: 'start-anchor' }]; // Initialize with the starting anchor
@@ -210,38 +248,25 @@ class Climber {
 
     draw() {
         this.canvasY = this.y - cameraY;
-        //console.log(`DRAWCLIMBER: Drawing climber at X: ${this.x.toFixed(2)}, Y: ${this.y.toFixed(2)}`);
-        // --- CLIMBER DRAWING ---
-        // The "animation" of the climber is its position (this.x, this.canvasY) changing each frame.
-        // The shape itself is static in this version.
-        // For sprite-based animation (like in many 2D games):
-        // 1. You'd have an image (sprite sheet) with different poses (frames) of the climber.
-        // 2. You'd load this image.
-        // 3. In this draw() function, you'd select a specific frame from the sprite sheet
-        //    based on the climber's state (e.g., reaching, idle, falling) and draw that part of the image
-        //    using ctx.drawImage(this.spriteSheet, frameX, frameY, frameWidth, frameHeight, this.x - offset, this.canvasY - offset, drawWidth, drawHeight).
-        //
-        // Using an SVG:
-        // - If you have an SVG file, you could load it as an image and draw it.
-        // - Or, you could parse the SVG's path data and draw it using canvas path commands. This is complex.
-        // - Creating a detailed SVG *from* a raster image (like your JPG link) automatically is very hard
-        //   and usually not practical for clean game assets. It's better to trace or create it manually.
+        
+        // Optimization: Don't draw if completely off-screen vertically
+        if (this.canvasY < -this.bodyHeight * 2 || this.canvasY > CANVAS_HEIGHT + this.bodyHeight * 2) {
+            return;
+        }
+        
+        // Decrement rope climbing animation timer if active
+        if (this.ropeClimbingAnimationActive) {
+            if (this.ropeClimbingAnimationTimer > 0) {
+                this.ropeClimbingAnimationTimer--;
+            } else {
+                this.ropeClimbingAnimationActive = false;
+            }
+        }
 
         // Current simple shape drawing: Body and Head
         const bodyTopY = this.canvasY - this.bodyHeight / 2 + this.headRadius / 2; // Adjust body pos for head
         const headCenterX = this.x;
         const headCenterY = bodyTopY - this.headRadius * 1.2; // Position head above body
-
-        // DEBUG LOG: Check climber's world Y and canvas Y, cameraY, and targetCameraY, especially during fall
-        if (this.isFalling) {
-            //console.log(`Climber Draw (Falling): WorldY: ${this.y.toFixed(1)}, CanvasY: ${this.canvasY.toFixed(1)}, CameraY: ${cameraY.toFixed(1)}, TargetCamY: ${typeof targetCameraY !== 'undefined' ? targetCameraY.toFixed(1) : 'undefined'}`);
-        }
-
-        // Optimization: Don't draw if completely off-screen vertically
-        if (this.canvasY < -this.bodyHeight * 2 || this.canvasY > CANVAS_HEIGHT + this.bodyHeight * 2) {
-            // console.log(`Climber not drawn: Off-screen. CanvasY: ${this.canvasY.toFixed(1)}`);
-            return;
-        }
 
         // Body (rounded rectangle)
         ctx.fillStyle = this.color;
@@ -260,6 +285,17 @@ class Climber {
         ctx.beginPath();
         ctx.arc(headCenterX, headCenterY, this.headRadius, 0, Math.PI * 2);
         ctx.fill();
+        
+        // ARMS HAVE BEEN COMPLETELY REMOVED FROM ALL STATES
+        // This ensures no arms are ever drawn in any game state
+        
+        // Log the current state for debugging - only when debug info is enabled
+        if (showDebugInfo) {
+            console.log("Climber state: " + gameState + 
+                      ", isFalling: " + this.isFalling + 
+                      ", catchProtection: " + (this.catchProtection ? "yes" : "no") +
+                      ", currentGrip: " + (this.currentGrip ? "yes" : "no"));
+        }
 
         // Draw reach indicator
         if (this.currentGrip && !this.isFalling && this.stamina > 0 && (gameState === 'playing' || gameState === 'falling')) {
@@ -272,10 +308,212 @@ class Climber {
             ctx.lineWidth = 1;
             ctx.stroke();
         }
+
+        // Draw facial features (beard and goggles)
+        const isVisibleFaceState = this.facialFeaturesState === 'facingForward' || 
+                                    this.facialFeaturesState === 'turningHead' ||
+                                    this.facialFeaturesState === 'idleTurningLeft' ||
+                                    this.facialFeaturesState === 'idleLookingLeft' ||
+                                    this.facialFeaturesState === 'idleReturningFromLeft' ||
+                                    this.facialFeaturesState === 'idleTurningRight' ||
+                                    this.facialFeaturesState === 'idleLookingRight' ||
+                                    this.facialFeaturesState === 'idleReturningFromRight';
+        if (isVisibleFaceState) {
+            let scale = 1;
+            let offsetX = 0;
+            let animationProgress = this.turnAnimationProgress; // Default to standard turn progress
+
+            // Pre-climb turn (to the right)
+            if (this.facialFeaturesState === 'turningHead') {
+                scale = 1 - animationProgress; 
+                offsetX = (this.headRadius * 0.8) * animationProgress; // Moves to the right
+            }
+            // Idle turning left
+            else if (this.facialFeaturesState === 'idleTurningLeft') {
+                scale = 1 - animationProgress;
+                offsetX = -(this.headRadius * 0.8) * animationProgress; // Moves to the left
+            }
+            // Idle looking left (paused)
+            else if (this.facialFeaturesState === 'idleLookingLeft') {
+                scale = this.MIN_IDLE_FEATURE_SCALE;
+                offsetX = -(this.headRadius * 0.8); // Fully to the left
+            }
+            // Idle returning from left
+            else if (this.facialFeaturesState === 'idleReturningFromLeft') {
+                // animationProgress goes from 1 (fully left) down to 0 (center)
+                scale = this.MIN_IDLE_FEATURE_SCALE + (1 - this.MIN_IDLE_FEATURE_SCALE) * (1 - animationProgress);
+                offsetX = -(this.headRadius * 0.8) * animationProgress; // Moves from left to center
+            }
+            // Idle turning right
+            else if (this.facialFeaturesState === 'idleTurningRight') {
+                scale = 1 - animationProgress;
+                offsetX = (this.headRadius * 0.8) * animationProgress; // Moves to the right
+            }
+            // Idle looking right (paused)
+            else if (this.facialFeaturesState === 'idleLookingRight') {
+                scale = this.MIN_IDLE_FEATURE_SCALE;
+                offsetX = (this.headRadius * 0.8); // Fully to the right
+            }
+            // Idle returning from right
+            else if (this.facialFeaturesState === 'idleReturningFromRight') {
+                // animationProgress goes from 1 (fully right) down to 0 (center)
+                scale = this.MIN_IDLE_FEATURE_SCALE + (1 - this.MIN_IDLE_FEATURE_SCALE) * (1 - animationProgress);
+                offsetX = (this.headRadius * 0.8) * animationProgress; // Moves from right to center
+            }
+            // 'facingForward' will use scale = 1, offsetX = 0 by default
+
+            ctx.save(); // Save context for temporary transformations
+            // Translate to the climber's head position and apply offset for turning effect
+            // The main drawing for head/body is already relative to this.x and this.canvasY
+
+            // --- Red Beard --- 
+            ctx.fillStyle = 'rgba(165, 58, 22, 0.8)'; // Reddish-brown
+            // Beard coordinates are relative to the head's center (this.x, headCenterY)
+            // We need to use this.canvasY for the reference, similar to how head/body are drawn.
+            const headCenterOnCanvasY = this.canvasY - this.bodyHeight / 2 - this.headRadius * 0.2; // Approximation, adjust if needed
+
+            const beardBaseY = headCenterOnCanvasY + this.headRadius * 0.4;
+            const beardPointY = headCenterOnCanvasY + this.headRadius * 1.5;
+            const beardWidthAtBase = this.headRadius * 0.8 * scale;
+
+            ctx.beginPath();
+            ctx.moveTo(this.x - beardWidthAtBase + offsetX, beardBaseY);
+            ctx.lineTo(this.x + beardWidthAtBase + offsetX, beardBaseY);
+            ctx.lineTo(this.x + offsetX, beardPointY); // Point of the beard remains centered relative to its scaled base
+            ctx.closePath();
+            ctx.fill();
+
+            // --- Goggles --- 
+            const goggleRadius = this.headRadius * 0.35 * scale;
+            if (goggleRadius > 1) { // Don't draw if too small
+                const goggleCenterY = headCenterOnCanvasY - this.headRadius * 0.1;
+                const goggleDistFromCenter = this.headRadius * 0.45 * scale;
+
+                ctx.fillStyle = 'rgba(141, 112, 112, 0.7)'; // Dark grey for lenses
+                ctx.strokeStyle = 'rgba(30, 30, 30, 0.9)'; // Darker grey for frame
+                ctx.lineWidth = Math.max(1, 2 * scale); // Scale line width, min 1
+
+                // Left Goggle
+                ctx.beginPath();
+                ctx.arc(this.x - goggleDistFromCenter + offsetX, goggleCenterY, goggleRadius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Right Goggle
+                ctx.beginPath();
+                ctx.arc(this.x + goggleDistFromCenter + offsetX, goggleCenterY, goggleRadius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Goggle Strap (simplified, could be improved)
+                ctx.beginPath();
+                ctx.moveTo(this.x - goggleDistFromCenter - goggleRadius + offsetX, goggleCenterY);
+                ctx.lineTo(this.x - this.headRadius + offsetX, goggleCenterY); 
+                ctx.moveTo(this.x + goggleDistFromCenter + goggleRadius + offsetX, goggleCenterY);
+                ctx.lineTo(this.x + this.headRadius + offsetX, goggleCenterY); 
+                ctx.stroke();
+            }
+            ctx.restore(); // Restore context
+        }
     }
 
     update(deltaTimeInSeconds) { 
         // console.log(`Climber.update() called. ID: ${this.id}, isFalling: ${this.isFalling}, isRecovering: ${this.isRecovering}, gameState: ${gameState}, y: ${this.y.toFixed(2)}, x: ${this.x.toFixed(2)}, stamina: ${this.stamina.toFixed(1)}`);
+
+        const dtMillis = deltaTimeInSeconds * 1000;
+
+        // Standard pre-climb head turn animation (only if not doing idle look)
+        if (this.facialFeaturesState === 'turningHead' && !this.isPerformingIdleLook) {
+            this.turnAnimationProgress += dtMillis / this.TURN_ANIMATION_DURATION;
+            if (this.turnAnimationProgress >= 1) {
+                this.turnAnimationProgress = 1;
+                this.facialFeaturesState = 'headTurned';
+            }
+        }
+        // Idle Look Animation State Machine (only if not doing the standard pre-climb turn)
+        else if (this.isPerformingIdleLook) {
+            this.idleTimer = 0; // Reset idle timer as we are actively animating
+
+            switch (this.idleLookPhase) {
+                case 'idleTurningLeft':
+                    this.facialFeaturesState = 'idleTurningLeft'; // Set state for drawing
+                    this.turnAnimationProgress += dtMillis / this.TURN_ANIMATION_DURATION;
+                    if (this.turnAnimationProgress >= 1) {
+                        this.turnAnimationProgress = 1;
+                        this.idleLookPhase = 'idleLookingLeft';
+                        this.idleLookPauseTimer = 0;
+                    }
+                    break;
+                case 'idleLookingLeft':
+                    this.facialFeaturesState = 'idleLookingLeft'; // Ensure state for drawing
+                    this.idleLookPauseTimer += dtMillis;
+                    if (this.idleLookPauseTimer >= this.IDLE_LOOK_PAUSE_DURATION) {
+                        this.idleLookPhase = 'idleReturningFromLeft';
+                        this.turnAnimationProgress = 1; // Start return from fully turned
+                    }
+                    break;
+                case 'idleReturningFromLeft':
+                    this.facialFeaturesState = 'idleReturningFromLeft'; // Set state for drawing
+                    this.turnAnimationProgress -= dtMillis / this.TURN_ANIMATION_DURATION;
+                    if (this.turnAnimationProgress <= 0) {
+                        this.turnAnimationProgress = 0;
+                        this.facialFeaturesState = 'facingForward'; // Briefly face forward
+                        this.idleLookPhase = 'idleTurningRight'; // Next phase
+                    }
+                    break;
+                case 'idleTurningRight':
+                    this.facialFeaturesState = 'idleTurningRight'; // Set state for drawing
+                    this.turnAnimationProgress += dtMillis / this.TURN_ANIMATION_DURATION;
+                    if (this.turnAnimationProgress >= 1) {
+                        this.turnAnimationProgress = 1;
+                        this.idleLookPhase = 'idleLookingRight';
+                        this.idleLookPauseTimer = 0;
+                    }
+                    break;
+                case 'idleLookingRight':
+                    this.facialFeaturesState = 'idleLookingRight'; // Ensure state for drawing
+                    this.idleLookPauseTimer += dtMillis;
+                    if (this.idleLookPauseTimer >= this.IDLE_LOOK_PAUSE_DURATION) {
+                        this.idleLookPhase = 'idleReturningFromRight';
+                        this.turnAnimationProgress = 1; // Start return
+                    }
+                    break;
+                case 'idleReturningFromRight':
+                    this.facialFeaturesState = 'idleReturningFromRight'; // Set state for drawing
+                    this.turnAnimationProgress -= dtMillis / this.TURN_ANIMATION_DURATION;
+                    if (this.turnAnimationProgress <= 0) {
+                        this.turnAnimationProgress = 0;
+                        this.idleLookPhase = 'none';
+                        this.isPerformingIdleLook = false;
+                        this.facialFeaturesState = 'facingForward'; // Back to normal
+                        this.idleTimer = 0; // Reset idle timer for next potential cycle
+                    }
+                    break;
+            }
+        }
+        // Logic to START the Idle Look animation IF:
+        // 1. Not currently performing an idle look (isPerformingIdleLook is false)
+        // 2. Not currently in the pre-climb head turn (facialFeaturesState is not 'turningHead')
+        // 3. Climber is truly idle (not moving, falling, recovering, etc.)
+        else { 
+            const isTrulyIdle = !this.isMoving && !this.isFalling && !this.isRecovering && !this.isBelayingUp;
+
+            if (isTrulyIdle && this.facialFeaturesState !== 'turningHead') {
+                // Allow idle look to start if face is 'facingForward' or already 'headTurned' (from a previous climb action)
+                if (this.facialFeaturesState === 'facingForward' || this.facialFeaturesState === 'headTurned') {
+                    this.idleTimer += dtMillis;
+                    if (this.idleTimer >= this.IDLE_TIMEOUT_DURATION) {
+                        this.isPerformingIdleLook = true;
+                        this.idleLookPhase = 'idleTurningLeft';
+                        this.turnAnimationProgress = 0; // Start fresh turn from center
+                        this.facialFeaturesState = 'idleTurningLeft'; // Set initial state for drawing
+                        this.idleTimer = 0; // Reset timer as sequence starts
+                    }
+                }
+            } else {
+                this.idleTimer = 0; // Reset if not truly idle or if pre-climb turn is happening
+            }
+        }
 
         if (this.isRecovering) {
             this.recoveryTimer -= deltaTimeInSeconds * 1000; // recoveryTimer is in ms
@@ -283,7 +521,38 @@ class Climber {
             // Reset fall sound flag when recovering
             this.resetFallSoundFlag();
 
-            if (this.isSwingRecovering && this.currentGrip && typeof this.fallDistance === 'number' && !isNaN(this.fallDistance) && this.fallDistance > 0) {
+            if (this.isBelayingUp) { 
+                // In belaying mode, only update X position to center on protection
+                this.x = this.catchProtection.x;
+                console.log("Climber.update: In belaying mode - pendulum physics disabled");
+                // Check if climber has reached the protection piece
+                if (this.y <= this.catchProtection.y) {
+                    console.log("Climber.update: Reached protection while belaying up.");
+                    this.y = this.catchProtection.y; // Snap to exact Y
+                    this.isBelayingUp = false;
+                    this.isRecovering = false; // No longer recovering from fall
+                    this.isFalling = false; // Ensure not falling
+                    this.catchProtection.isUsed = true; // Mark protection as used for rope logic potentially
+                    this.currentGrip = null; // No longer on a physical grip, but on the wall at protection
+                    this.stamina = Math.max(this.stamina, STAMINA_RECOVERY_THRESHOLD); // Give some stamina back
+                    
+                    // Update rope anchor to the protection piece
+                    this.ropeAnchorX = this.catchProtection.x;
+                    this.ropeAnchorY = this.catchProtection.y;
+                    this.addRopeNode(this.catchProtection);
+                    
+                    this.catchProtection = null; // Clear catch protection
+                    gameState = 'playing';
+                    console.log("Climber.update: Belay complete. State: playing. Activating grips.");
+                    playSound('grab'); // Sound for re-establishing on wall
+                    this.activateGripsWithinReach();
+                    this.facialFeaturesState = 'facingForward'; // Turn face forward
+                    this.isPerformingIdleLook = false; // Interrupt idle look if active
+                    this.idleLookPhase = 'none';
+                    this.idleTimer = 0;
+                }
+            } else if (this.isSwingRecovering && this.currentGrip && typeof this.fallDistance === 'number' && !isNaN(this.fallDistance) && this.fallDistance > 0) {
+                // Normal pendulum swing physics
                 const SWING_SPEED_CONSTANT = 0.006;
                 const MAX_SWING_AMPLITUDE_FACTOR = 0.6; // Proportion of fallDistance
                 const MAX_ABS_SWING_CAP = this.bodyHeight * 3; // Absolute cap on swing width
@@ -304,6 +573,7 @@ class Climber {
                 const radicand = Math.pow(L_effective_to_feet, 2) - Math.pow(current_x_offset, 2);
                 const y_displacement_from_pivot = Math.sqrt(Math.max(0, radicand));
                 
+                // Only update Y position if we're not in belaying mode
                 this.y = this.currentGrip.y + y_displacement_from_pivot;
 
             } else if (this.isSwingRecovering && this.currentGrip) {
@@ -314,12 +584,12 @@ class Climber {
                 }
             }
 
-            if (this.recoveryTimer <= 0) {
+            if (this.recoveryTimer <= 0 && !this.isBelayingUp) { // Don't end recovery if actively belaying
                 const wasSwingRecovering = this.isSwingRecovering;
                 this.isRecovering = false;
-                this.isSwingRecovering = false; 
+                this.isSwingRecovering = false; // Indicate swing recovery starts
                 gameState = 'playing'; 
-                console.log("Climber recovery complete.");
+                //console.log("Climber recovery complete.");
                 // Removed sound at recovery completion
                 if (this.currentGrip) {
                     this.x = this.currentGrip.x; // Snap X at the END of recovery
@@ -336,7 +606,12 @@ class Climber {
                 this.catchProtection = null;
                 
                 // Activate grips within reach after recovery
-                this.activateGripsWithinReach();
+                // Use a small delay to ensure the climber is in the final position
+                setTimeout(() => {
+                    if (this && gameState === 'playing') {
+                        this.activateGripsWithinReach();
+                    }
+                }, 50);
             }
             return; 
         }
@@ -575,6 +850,15 @@ class Climber {
                 this.playedFallSoundThisFall = true;
             }
         }
+
+        // Interrupt idle look animation if active
+        if (this.isPerformingIdleLook) {
+            this.isPerformingIdleLook = false;
+            this.idleLookPhase = 'none';
+            this.facialFeaturesState = 'headTurned'; // Or 'facingForward' then hidden by fall logic
+            this.turnAnimationProgress = 1; // Ensure features are fully turned/hidden
+            this.idleTimer = 0;
+        }
     }
 
     moveToGrip(grip) {
@@ -585,7 +869,11 @@ class Climber {
 
         if (this.canReachGrip(grip)) {
             if (this.currentGrip) {
-                this.currentGrip.release();
+                // Check if currentGrip is a Grip object with a release method
+                // This prevents errors when currentGrip is a protection piece
+                if (this.currentGrip instanceof Grip && typeof this.currentGrip.release === 'function') {
+                    this.currentGrip.release();
+                }
             }
             this.x = grip.x;
             this.y = grip.y;
@@ -609,6 +897,33 @@ class Climber {
             }
             // NOTE: We no longer add regular grips to ropePathNodes
             // Only protection pieces should be in ropePathNodes
+            
+            // Trigger facial features animation
+            if (this.isPerformingIdleLook) {
+                this.isPerformingIdleLook = false;
+                this.idleLookPhase = 'none';
+                this.idleTimer = 0;
+                this.facialFeaturesState = 'turningHead'; // Standard pre-climb turn
+                this.turnAnimationProgress = 0;
+            } else if (this.facialFeaturesState === 'facingForward' || this.facialFeaturesState === 'headTurned') {
+                this.facialFeaturesState = 'turningHead';
+                this.turnAnimationProgress = 0;
+            }
+            
+            // Interrupt idle look animation if active
+            if (this.isPerformingIdleLook) {
+                this.isPerformingIdleLook = false;
+                this.idleLookPhase = 'none';
+                this.idleTimer = 0;
+                // Proceed with standard pre-climb turn
+                this.facialFeaturesState = 'turningHead';
+                this.turnAnimationProgress = 0;
+            } else if (this.facialFeaturesState === 'headTurned') {
+                // If not idle-looking, but face is turned (from a previous climb), start normal pre-climb turn.
+                this.facialFeaturesState = 'turningHead';
+                this.turnAnimationProgress = 0;
+            }
+            
             return true;
         } else {
             // console.log("Cannot reach grip.");
@@ -653,7 +968,45 @@ class Climber {
             generateGripsAroundClimber();
         }
     }
-
+    
+    // Animation properties for rope climbing
+    ropeClimbingHands = { left: { x: 0, y: 0 }, right: { x: 0, y: 0 } };
+    ropeClimbingAnimationActive = false;
+    ropeClimbingAnimationTimer = 0;
+    
+    belayUp() {
+        if (!this.catchProtection || this.isFalling) {
+            console.log("belayUp: Cannot belay - no catch protection or still falling.");
+            return false;
+        }
+        
+        // Initiate belaying state if not already
+        if (!this.isBelayingUp) {
+            console.log("belayUp: Initiating belay mode.");
+            this.isBelayingUp = true;
+            this.isRecovering = true; // Ensure recovery logic in update() handles this
+            this.isSwingRecovering = false; // Stop any swing
+            this.velocityY = 0; // Stop any residual fall velocity
+            this.x = this.catchProtection.x; // Center climber on protection immediately
+            // If climber is below the protection, move them up to start the belay process
+            // This handles cases where the climber might be at the bottom of a swing arc
+            if (this.y > this.catchProtection.y) {
+               // this.y = this.catchProtection.y; // Optionally snap directly, or let the 5px move handle it
+            }
+            // If the recovery timer was running for a swing, reset it or manage it for belay
+            // For now, we let isRecovering = true and the update loop manage the state change.
+        }
+        
+        // Move climber up by 5 pixels
+        this.y -= 5;
+        playSound('belay_click');
+        console.log(`belayUp: Climber moved up 5px. New Y: ${this.y.toFixed(2)}. Target Y: ${this.catchProtection.y.toFixed(2)}`);
+        
+        // The Climber.update() method will handle reaching the protection point
+        // and transitioning out of belay mode.
+        return true;
+    }
+    
     placeProtection() {
         if (this.protectionInventory > 0 && this.currentGrip && this.currentGrip.isCrack) {
             const newProtection = new Protection(this.x, this.y + PROTECTION_SIZE);
@@ -674,8 +1027,26 @@ class Climber {
                     type: 'protection', 
                     id: newProtection.id 
                 };
-                this.ropePathNodes.push(protectionNode);
+                this.addRopeNode(protectionNode);
             }
+        }
+    }
+    
+    addRopeNode(node) {
+        if (!node || typeof node.id === 'undefined') {
+            // console.warn('Attempted to add an invalid or null rope node, or node without ID:', node);
+            return;
+        }
+
+        // Check if node.id already exists in ropePathNodes
+        // Ensure elements 'n' in ropePathNodes are also valid before accessing n.id
+        const existingNode = this.ropePathNodes.find(n => n && typeof n.id !== 'undefined' && n.id === node.id);
+
+        if (!existingNode) {
+            this.ropePathNodes.push({ x: node.x, y: node.y, type: node.type, id: node.id });
+            // console.log(`Rope node added: ${node.id} at (${node.x}, ${node.y})`);
+        } else {
+            // console.log(`Rope node ${node.id} already exists.`);
         }
     }
 }
@@ -1479,13 +1850,12 @@ function drawRope() {
         // Find the catch protection in ropePathNodes
         let catchProtectionIndex = -1;
         for (let i = 0; i < climber.ropePathNodes.length; i++) {
-            const node = climber.ropePathNodes[i];
-            if (node.type === 'protection' && node.id === climber.catchProtection.id) {
+            if (climber.ropePathNodes[i].type === 'protection' && climber.ropePathNodes[i].id === climber.catchProtection.id) {
                 catchProtectionIndex = i;
                 break;
             }
         }
-        
+
         // Draw from catch protection to the rest of the protection pieces and the start anchor
         if (catchProtectionIndex >= 0) {
             // Find all protection pieces below the catch protection
@@ -1542,17 +1912,22 @@ function drawRope() {
 }
 
 function handleCanvasClick(event) {
-    if (climber && (climber.isRecovering || gameState === 'fallingToSafety' || gameState === 'recovering')) return;
+    // Don't process clicks during recovery, falling to safety, or when in recovering state
+    if (climber && (climber.isRecovering || gameState === 'fallingToSafety' || gameState === 'recovering')) {
+        return;
+    }
+    
     if (gameState === 'start') { 
         startGamePlay();
         return; 
     }
+    
     if (gameState !== 'playing') return;
-    initAudio(); 
+    initAudio(); // Ensure audio is initialized on first click
 
     const rect = canvas.getBoundingClientRect();
     const clickX = event.clientX - rect.left;
-    const clickY = event.clientY - rect.top + cameraY;
+    const clickY = event.clientY - rect.top + cameraY; // Add cameraY to get world coordinates
 
     let bestGrip = null; let minDistToClick = Infinity;
     grips.forEach(grip => {
@@ -1565,12 +1940,57 @@ function handleCanvasClick(event) {
             }
         }
     });
-    if (bestGrip) climber.moveToGrip(bestGrip);
+    
+    // Only move to grip if we found one and the climber is in a valid state
+    if (bestGrip) {
+        climber.moveToGrip(bestGrip);
+    }
 }
 
 function handleKeyPress(event) {
-    if (climber && (climber.isRecovering || gameState === 'fallingToSafety' || gameState === 'recovering')) return;
-
+    // Special case for belaying up with spacebar when hanging
+    // Check for catchProtection which indicates the climber can belay up
+    if (climber && climber.catchProtection && !climber.isFalling) { 
+        if (event.code === 'Space' || event.key === ' ') {
+            // Belay up when spacebar is pressed while hanging
+            console.log("SPACEBAR PRESSED: Attempting to belay up");
+            
+            // For long falls, we need to reset the swing recovery state
+            // This is now handled more robustly in belayUp() itself by setting isBelayingUp.
+            // if (climber.isSwingRecovering) {
+            //     console.log("Canceling swing recovery from handleKeyPress to allow belaying");
+            //     climber.isSwingRecovering = false;
+            //     climber.isRecovering = false; // This might be too abrupt, belayUp manages this
+            // }
+            
+            // gameState management can also be part of belayUp or the update loop when isBelayingUp is true.
+            // if (gameState !== 'fallingToSafety' && gameState !== 'recovering' && gameState !== 'playing') {
+            //     console.log("Forcing game state to appropriate for belaying");
+            //     // gameState = 'recovering'; // Or let belayUp manage this
+            // }
+            
+            // Velocities and positioning are best handled in belayUp() for consistency
+            // climber.velocityY = 0;
+            // if (climber.fallDistance > 180) { 
+            //     climber.x = climber.catchProtection.x;
+            // }
+            
+            // Force the belayUp method to be called
+            const belayInitiated = climber.belayUp();
+            if (belayInitiated) {
+                console.log("handleKeyPress: belayUp() successfully initiated/progressed.");
+            } else {
+                console.log("handleKeyPress: belayUp() failed or could not be initiated.");
+            }
+            event.preventDefault(); // Prevent default spacebar behavior (like scrolling)
+            return;
+        }
+        return; // Don't process other keys while hanging
+    }
+    
+    // Don't process keys during recovery IF NOT belaying
+    if (climber && climber.isRecovering && !climber.isBelayingUp) return;
+    
     if (event.key === 'd' || event.key === 'D') { 
         showDebugInfo = !showDebugInfo;
         return; 
@@ -1579,6 +1999,7 @@ function handleKeyPress(event) {
     if (gameState === 'initial' || gameState === 'start' || gameState === 'gameOver') {
         if (event.code === 'Space' || event.key === 'Enter' || event.key === ' ') {
             startGamePlay();
+            event.preventDefault(); // Prevent default spacebar behavior
         }
         return; 
     }
