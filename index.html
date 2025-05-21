@@ -4,50 +4,83 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vertical Odyssey</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <div id="game-wrapper"> <!-- Added a wrapper for easier centering/styling -->
-        <div id="instructionsScreen">
-            <h2>Steffo's Vertical Odyssey</h2>
-            
-            <p><strong>You are Mr Steffo</strong>, the Red Beard Legend with a slightly Bad Ass. Ascend this treacherous Big Wall. Your legend grows with every perilous meter conquered. Only the tenacious will etch their name into the annals of the Odyssey. </p>
-            
-            <p><strong>Commands of The Holy Climb:</strong></p>
-            <ul>
-                <li><strong>Click Mouse:</strong> Reach for and grab a visible handhold. Choose wisely; your reach is mighty, but not infinite!</li>
-                <li><strong>'P' Key:</strong> When clinging to a sturdy crack (the rectangular holds), press 'P' to place a "nut" – so don't leave your cohones at home!</li>
-            </ul>
+    <div id="game-wrapper" class="vertical-odyssey-container">
+        <div id="original-position-marker" class="vertical-odyssey-marker"></div>
+        
+        <div id="instructions-screen" class="screen">
+            <div id="instructions-content">
+                <h1>VERTICAL ODYSSEY</h1>
+                <h2>The Legend at Mount Hub</h2>
+                
+                <p><strong>You are Mr Steffo</strong>, the Red Beard Legend with a slightly Bad Ass. Eleven hours of climbing and you are close to the summit of the treacherous Hub Wall. Your legend grows with every perilous meter conquered. Only the tenacious will etch their name into the annals of the Mount Hub Odyssey.</p>
+                <p><strong>Commands of The Holy Mount Hub:</strong></p>
+                <ul>
+                    <li><strong>Click Mouse:</strong> Reach for and grab a visible handhold. Choose wisely; your reach is mighty, but not infinite!</li>
+                    <li><strong>\'P\' Key:</strong> When clinging to a sturdy crack, press \'P\' to place a "nut" – so don\'t leave your cohones at home!</li>
+                    <li><strong>\'Space\' Key:</strong> You are getting hauled up. You rest. You recover. No glory.</li>
+                </ul>
 
-            <p><strong>The Perils & Principles:</strong></p>
-            <ul>
-                <li><strong>Veiled Holds:</strong> Grips shimmer into existence only as you draw near. Anticipate and explore!</li>
-                <li><strong>Fleeting Stability:</strong> Every hold is ephemeral! Cling too long, and you will slip with your sweaty little korvfingers. Agility is key.</li>
-                <li><strong>The Fall & Return:</strong> A misstep or failed grip sends you plummeting to your last secure protection, or worse. You'll earn no glory until your previous altitude is reclaimed.</li>
-                <li><strong>Vital Essence (Stamina):</strong> Each move saps your strength. Exhaustion means an inevitable fall.</li>
-                <li><strong>Precious micro-nuts:</strong> Your supply is finite and you're out of cams. Use your micro cohones wisely – the higher you climb, the greater the risk... and the reward.</li>
-            </ul>
-            <p class="start-prompt">Use the "Any Key" to Begin!</p>
-        </div>
-
-        <div id="game-container" class="hidden"> <!-- Initially hidden -->
-            <canvas id="gameCanvas"></canvas>
-            <div id="ui-container"> <!-- This is the scoreboard -->
-                <div>Score: <span id="score">0</span></div>
-                <div>High Score: <span id="inGameHighScore">0</span></div>
-                <div>Stamina: <span id="stamina">100</span></div>
-                <div>Protection: <span id="protectionCount">3</span></div>
-                <div>Height: <span id="currentHeight">0</span>m</div>
+                <p><strong>The Perils & Principles:</strong></p>
+                <ul>
+                    <li><strong>Veiled Holds:</strong> Grips are visible only as you draw near. Anticipate and explore!</li>
+                    <li><strong>Stability:</strong> Every hold is ephemeral! Cling too long, and you will slip with your sweaty little korvfingers. Agility is key.</li>
+                    <li><strong>The Fall:</strong> A misstep, lingering or failed grip sends you flailing to your last secure protection, or worse. There is never a guarantee.</li>
+                    <li><strong>Grit:</strong> Each move gives you pump. Speed is safety. Be tactical.</li>
+                    <li><strong>Only micro-nuts:</strong> Your supply is finite and you\'re out of cams. Use your Micro Cohones wisely – the higher you climb, the greater the risk... and the reward.</li>
+                    <li><strong>On a good day:</strong> If Miss Fortune shines on you, there is a chance you get free rest on the red stands close to the summit.</li>
+                    <li><strong>On a bad day:</strong> There might not be grips within reach after a fall and belay. Your grit might run out and you get pumped.</li>
+                </ul>
+                <p class="start-prompt">Use The "Any Key" to Begin ;)</p>
+                <button id="start-game-fullscreen" class="button start-game-button">Start new pitch in Fullscreen</button>
             </div>
         </div>
 
-        <div id="gameOverScreen" class="hidden"> <!-- Initially hidden -->
-            <h1>Terminal fall and Game Over</h1>
-            <p>Final Score: <span id="finalScore">0</span></p>
-            <p>High Score: <span id="highScoreDisplay">0</span></p>
-            <button id="restartButton">Restart Odyssey</button>
+        <div id="game-container" class="hidden">
+            <!-- Fullscreen toggle button inside game container -->
+            <button id="fullscreen-toggle" class="fullscreen-button" title="Toggle Fullscreen">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+                </svg>
+            </button>
+            
+            <canvas id="game-canvas"></canvas>
+            <div id="ui-container">
+                <div>Score: <span id="score">0</span></div>
+                <div>High Score: <span id="in-game-high-score">0</span></div>
+                <div>Grit: <span id="pump">100</span></div>
+                <div>Protection: <span id="protection-count">3</span></div>
+                <div>Height: <span id="current-height">0</span>m</div>
+                <div id="message-area"><span id="message"></span></div>
+            </div>
         </div>
+        <div id="game-won-screen" class="screen hidden">
+            <h1>Congratulations!</h1>
+            <h2>You Reached the Summit!</h2>
+            <p>Final Score: <span id="final-score-win">0</span></p>
+            <p>High Score: <span id="high-score-win">0</span></p>
+            <button id="restart-button-win" class="button">Play Again</button>
+            <button id="glory-button" class="button">Bask in Glory</button>
+        </div>
+        <div id="glory-screen" class="screen hidden">
+            <h2>Mount Hub is humbled</h2>
+            <p>The Red Beard Legend (with a slightly Bad Ass), has conquered the treacherous Hub Wall. Your legend grows.</p>
+            <p>Final Score: <span id="final-score-glory">0</span></p>
+            <p>High Score: <span id="high-score-glory">0</span></p>
+            <button id="restart-button-glory" class="button">Play Again</button>
+        </div>
+        <div id="game-over-screen" class="screen hidden">
+            <h1>Terminal fall and Game Over</h1>
+            <p>Final Score: <span id="final-score">0</span></p>
+            <p>High Score: <span id="high-score-game-over">0</span></p>
+            <button id="restart-button" class="button">Restart the climb</button>
+        </div>
+        
+        <!-- Elements needed for fullscreen mode -->
+        <div id="fullscreen-container" class="hidden"></div>
     </div>
-    <script src="script.js"></script>
+    <script type="module" src="script.js"></script>
 </body>
 </html>

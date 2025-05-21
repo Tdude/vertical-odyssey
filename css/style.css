@@ -1,0 +1,372 @@
+html {
+    touch-action: manipulation; /* Prevent double-tap zoom */
+}
+
+body {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 16px;
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+    overflow: visible; /* Allow scrolling if needed */
+    text-align: center;
+    touch-action: none; /* Prevent browser zoom on touch devices */
+}
+
+/* Ensure monospace font for all game elements */
+#game-wrapper, 
+#game-wrapper *, 
+.fullscreen-overlay, 
+.fullscreen-overlay * {
+    font-family: 'Courier New', Courier, monospace !important;
+}
+
+#game-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Fix for game wrapper in fullscreen mode */
+.fullscreen-overlay #game-wrapper {
+    width: 100vw;
+    height: 100vh;
+    max-width: 100vw;
+    max-height: 100vh;
+}
+
+/* Full-screen mode styles */
+/* Start Game button */
+.start-game-button {
+    display: block;
+    margin: 20px auto 10px;
+    padding: 12px 25px;
+    background-color: #080;
+    color: white;
+    border: 2px solid #0f0;
+    border-radius: 8px;
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+    transition: all 0.3s ease;
+}
+
+.start-game-button:hover {
+    background-color: #0a0;
+    box-shadow: 0 0 15px rgba(0, 255, 0, 0.8);
+    transform: scale(1.05);
+}
+
+/* Full-screen mode styles */
+.fullscreen-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.9);
+    z-index: 9999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+/* General style for the game container */
+#game-container {
+    position: relative;
+    width: 100%; 
+    height: 100%; 
+    min-height: 1px; 
+    display: flex; 
+    justify-content: center;
+    align-items: center;
+    /* border: 1px dashed cyan; */
+}
+
+/* Ensure #game-container in fullscreen also fills its space */
+.fullscreen-overlay #game-container {
+    position: relative; 
+    width: 100%;
+    height: 100%; 
+    max-width: none; 
+    margin: 0 auto; 
+}
+
+/* General style for the canvas element to fill its container */
+#game-canvas {
+    display: block; 
+    width: 100%;    
+    height: 100%;   
+}
+
+/* Ensure canvas fills container - Commented out aspect ratio logic for now */
+
+.fullscreen-overlay #game-canvas {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+
+/* Fullscreen toggle button */
+.fullscreen-button {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background-color: rgba(0, 128, 0, 0.7);
+    color: white;
+    border: 2px solid #0f0;
+    border-radius: 50%; /* Make it fully round */
+    width: 40px;
+    height: 40px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    z-index: 1000;
+    padding: 8px;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+    transition: all 0.2s ease;
+}
+
+.fullscreen-button:hover {
+    background-color: rgba(0, 160, 0, 0.9);
+    box-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
+}
+
+/* Position the button inside game container */
+#game-container .fullscreen-button {
+    z-index: 1010; /* Ensure it's above other game elements */
+}
+
+.screen {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    background-color: rgba(10, 10, 10, 0.85); /* Common background */
+    padding: 30px; /* Common padding */
+    border-radius: 8px;
+    text-align: center;
+    border: 2px solid #0f0;
+    color: #0f0;
+    box-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
+    z-index: 100;
+    width: 350px; /* Default width, can be overridden */
+}
+
+.hidden {
+    display: none !important;
+}
+
+#instructions-screen {
+    left: unset;
+    top: unset;
+    transform: unset;
+    padding: 20px 30px;
+    width: 100%;
+    max-width: 800px;
+    height: auto;
+    overflow-y: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    margin: 0 auto;
+    background-color: rgba(10, 10, 10, 0.85);
+}
+
+/* Instructions content with auto-scrolling animation */
+#instructions-content {
+    position: relative;
+    animation: autoscroll 90s linear forwards;
+    animation-play-state: paused; /* Start paused */
+    padding-bottom: 50px; /* Add extra padding at bottom */
+}
+
+/* Show instructions screen elements for 15 seconds before scrolling */
+.instructions-visible #instructions-content {
+    animation-play-state: running;
+    animation-delay: 5s; /* Shorter delay before scrolling begins */
+}
+
+@keyframes autoscroll {
+    0% { transform: translateY(0); }
+    5% { transform: translateY(0); } /* Hold at top for a short time */
+    100% { transform: translateY(-100%); } /* Full scroll */
+}
+
+/* Style for the start prompt at the bottom */
+.start-prompt {
+    text-align: center;
+    font-size: 1.5em;
+    margin-top: 2em;
+    padding: 10px;
+    color: #0f0;
+    text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+}
+
+@media screen and (max-width: 800px) {
+    #instructions-screen {
+        width: 100%;
+    }
+}
+
+
+#instructions-content h1,
+#instructions-content h2 {
+    font-size: 2.5em;
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: #0f0;
+    text-shadow: 0 0 10px rgba(0, 255, 0, 0.8);
+}
+#instructions-content h2 {
+    font-size: 1.4em;
+}
+#instructions-content p {
+    font-size: 0.95em;
+    line-height: 1.5;
+    margin-bottom: 12px;
+    text-align: left;
+}
+#instructions-content p em {
+    color: #0c0;
+    display: block;
+    text-align: center;
+    margin-bottom: 15px;
+    font-style: italic;
+}
+#instructions-content strong {
+    color: #3f3; /* Brighter green for emphasis */
+}
+#instructions-content ul {
+    list-style-type: none;
+    padding-left: 0;
+    text-align: left;
+}
+#instructions-content ul li {
+    margin-bottom: 8px;
+    padding-left: 1.2em;
+    position: relative;
+}
+#instructions-content ul li::before {
+    content: "»"; /* Or any other retro bullet */
+    position: absolute;
+    left: 0;
+    color: #0c0;
+}
+#instructions-content .start-prompt {
+    font-weight: bold;
+    font-size: 1.1em;
+    margin-top: 25px;
+    text-align: center;
+    animation: blink 1.5s infinite ease-in-out;
+    color: #ffc107;
+    text-shadow: 0 0 10px rgba(246, 204, 80, 0.5);
+}
+
+@keyframes blink {
+    0% { opacity: 1; }
+    50% { opacity: 0.3; }
+    100% { opacity: 1; }
+}
+
+/* Game Logo Styles */
+#game-logo {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    z-index: 10;
+    background: url('../logo-toh.svg');
+    background-size: contain;
+    background-repeat: no-repeat;
+    padding: 5px;
+    transition: all 0.2s ease-in-out;
+    color: transparent; /* Hide text content */
+    display: block;
+    width: 24px;
+    height: 24px;
+    opacity: 0.7;
+}
+
+#game-logo:hover {
+    opacity: 1;
+    transform: scale(1.05);
+}
+
+/* border: 3px solid #505050; */
+/* box-shadow: 0 0 20px rgba(0,0,0,0.6); */
+/* background-color: #333; */
+
+#game-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    position: relative;
+    z-index: 5; /* Ensure canvas receives click events */
+    cursor: pointer;
+}
+
+#ui-container { /* Scoreboard */
+    position: absolute;
+    z-index: 999;
+    max-width: 140px;
+    top: 6px;
+    left: 6px;
+    background-color: rgba(10, 10, 10, 0.65);
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px solid #0c0;
+    color: #0f0;
+    font-size: 12px;
+    box-shadow: 0 0 8px rgba(0, 255, 0, 0.3);
+    text-align: left;
+}
+
+#ui-container div {
+    margin-bottom: 6px;
+}
+
+
+#game-over-screen {
+    width: 300px; /* Specific width for game-over, slightly narrower than default .screen */
+}
+
+#game-over-screen h1, #game-won-screen h1 {
+    margin-top: 0;
+    font-size: 1.6em;
+    color: #0f0;
+    text-shadow: 0 0 10px #6f6;
+}
+
+.button {
+    background-color: #080;
+    color: #000;
+    border: 2px solid #0f0;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+    padding: 12px 25px;
+    font-size: 1.1em;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 20px;
+    border-radius: 4px;
+    transition: background-color 0.2s, color 0.2s;
+}
+.button:hover {
+    background-color: #0f0;
+    color: #000;
+}
